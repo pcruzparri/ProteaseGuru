@@ -1,16 +1,8 @@
-﻿using Chemistry;
-using Proteomics;
+using Chemistry;
 using Proteomics.AminoAcidPolymer;
 using Proteomics.ProteolyticDigestion;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Text;
 using Omics.Modifications;
-using UsefulProteomicsDatabases;
-using TopDownProteomics.IO.Obo;
 
 namespace Engine
 {
@@ -29,7 +21,8 @@ namespace Engine
 
         static GlobalVariables()
         {
-            ProteaseGuruVersion = typeof(GlobalVariables).Assembly.GetName().Version.ToString();
+            var version = typeof(GlobalVariables).Assembly.GetName().Version;
+            ProteaseGuruVersion = version?.ToString() ?? "Unknown";
 
             if (ProteaseGuruVersion.Equals("1.0.0.0"))
             {

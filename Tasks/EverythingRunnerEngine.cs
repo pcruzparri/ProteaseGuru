@@ -1,13 +1,7 @@
-﻿using Engine;
-using FlashLFQ;
+using Engine;
 using Proteomics;
-using Proteomics.ProteolyticDigestion;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace Tasks
@@ -18,26 +12,27 @@ namespace Tasks
         private string OutputFolder;
         private List<DbForDigestion> CurrentXmlDbFilenameList;
 
-        public EverythingRunnerEngine(List<(string,ProteaseGuruTask)> runList, List<DbForDigestion> startingXmlDbFilenameList, string outputFolder)
+        public EverythingRunnerEngine(List<(string, ProteaseGuruTask)> runList, List<DbForDigestion> startingXmlDbFilenameList, string outputFolder)
         {
             RunList = runList;
             OutputFolder = outputFolder.Trim('"');            
             CurrentXmlDbFilenameList = startingXmlDbFilenameList;
+            PeptideByFile = new Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>>();
         }
 
-        public static event EventHandler<StringEventArgs> FinishedWritingAllResultsFileHandler;
+        public static event EventHandler<StringEventArgs>? FinishedWritingAllResultsFileHandler;
 
-        public static event EventHandler StartingAllTasksEngineHandler;
+        public static event EventHandler? StartingAllTasksEngineHandler;
 
-        public static event EventHandler<StringEventArgs> FinishedAllTasksEngineHandler;
+        public static event EventHandler<StringEventArgs>? FinishedAllTasksEngineHandler;
 
-        public static event EventHandler<XmlForTaskListEventArgs> NewDbsHandler;        
+        public static event EventHandler<XmlForTaskListEventArgs>? NewDbsHandler;        
 
-        public static event EventHandler<StringEventArgs> WarnHandler;
+        public static event EventHandler<StringEventArgs>? WarnHandler;
 
         public Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>> PeptideByFile;
 
-        public MyTaskResults Run()
+        public MyTaskResults? Run()
         {
             StartingAllTasks();
             var stopWatch = new Stopwatch();
@@ -48,7 +43,7 @@ namespace Tasks
             OutputFolder = OutputFolder.Replace("$DATETIME", startTimeForAllFilenames);
 
             StringBuilder allResultsText = new StringBuilder();
-            MyTaskResults results = null;
+            MyTaskResults? results = null;
 
             for (int i = 0; i < RunList.Count; i++)
             {
@@ -61,7 +56,7 @@ namespace Tasks
                 }
                 var ok = RunList[i];
                 
-                var outputFolderForThisTask = System.IO.Path.Combine(OutputFolder, "ProteaseGuruDigestionResults");
+                var outputFolderForThisTask = Path.Combine(OutputFolder, "ProteaseGuruDigestionResults");
 
                 if (!Directory.Exists(outputFolderForThisTask))
                     Directory.CreateDirectory(outputFolderForThisTask);

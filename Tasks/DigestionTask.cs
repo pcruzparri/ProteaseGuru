@@ -1,4 +1,4 @@
-﻿using Engine;
+using Engine;
 using Proteomics;
 using Proteomics.ProteolyticDigestion;
 using Proteomics.RetentionTimePrediction;
@@ -25,11 +25,11 @@ namespace Tasks
         public static event EventHandler<StringEventArgs> DigestionWarnHandler;
         public Parameters DigestionParameters { get; set; }
 
-        public Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>> PeptideByFile;
+        public Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>>? PeptideByFile;
 
         public static event EventHandler<StringEventArgs> OutLabelStatusHandler;
 
-        public static Dictionary<string, Dictionary<Protein, List<InSilicoPep>>> AllPeptidesByProtease;
+        public static Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>? AllPeptidesByProtease;
 
         public  Dictionary<string, Dictionary<Protein, (double, double)>> SequenceCoverageByProtease = new Dictionary<string, Dictionary<Protein, (double, double)>>();
         public override MyTaskResults RunSpecific(string OutputFolder, List<DbForDigestion> dbFileList)
