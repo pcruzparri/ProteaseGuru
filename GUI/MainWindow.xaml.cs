@@ -21,8 +21,9 @@ using System.IO;
 using System.Globalization;
 using static Tasks.ProteaseGuruTask;
 using MzLibUtil;
-using ProteaseGuruGUI;
 using System.Diagnostics;
+using Omics.Digestion;
+using Omics.Modifications;
 using UsefulProteomicsDatabases;
 
 namespace GUI
