@@ -427,7 +427,7 @@ namespace GUI
             return i * sign;
         }
 
-        //be able to expot the plots made as pdf files
+        //be able to export the plots made as pdf files
         private void CreatePlotPdf_Click(object sender, RoutedEventArgs e)
         {
             var selectedItem = HistogramComboBox.SelectedItem;
@@ -451,8 +451,11 @@ namespace GUI
 
             using (Stream writePDF = File.Create(Path.Combine(fileDirectory, fileName)))
             {
-                PdfExporter.Export(plotViewStat.Model, writePDF, 1000, 700);
+                // OxyPlot 2.2: Use OxyPlot.SkiaSharp.PdfExporter instead of deprecated OxyPlot.PdfExporter
+                var exporter = new OxyPlot.SkiaSharp.PdfExporter { Width = 1000, Height = 700 };
+                exporter.Export(plotViewStat.Model, writePDF);
             }
+    
             plotViewStat.Width = tmpW;
             plotViewStat.Height = tmpH;
             string message = "PDF Created at " + Path.Combine(fileDirectory, fileName) + "! Would you like to copy the file path?";
