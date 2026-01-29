@@ -1,7 +1,3 @@
-﻿using Proteomics;
-using Proteomics.ProteolyticDigestion;
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace Tasks
@@ -88,17 +84,12 @@ namespace Tasks
             sb.Append(ElectrophoreticMobility);
            return sb.ToString();
         }
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            var q = obj as InSilicoPep;
-            if (BaseSequence == q.BaseSequence && Protease == q.Protease)
-            {
-                return true;
-            }
-            else
-            {
+            if (obj is not InSilicoPep q)
                 return false;
-            }
+                
+            return BaseSequence == q.BaseSequence && Protease == q.Protease;
         }
       
 

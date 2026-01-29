@@ -1,4 +1,4 @@
-﻿using Engine;
+using Engine;
 using Proteomics;
 using Proteomics.ProteolyticDigestion;
 using Proteomics.RetentionTimePrediction;
@@ -25,11 +25,11 @@ namespace Tasks
         public static event EventHandler<StringEventArgs> DigestionWarnHandler;
         public Parameters DigestionParameters { get; set; }
 
-        public Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>> PeptideByFile;
+        public Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>>? PeptideByFile;
 
         public static event EventHandler<StringEventArgs> OutLabelStatusHandler;
 
-        public static Dictionary<string, Dictionary<Protein, List<InSilicoPep>>> AllPeptidesByProtease;
+        public static Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>? AllPeptidesByProtease;
 
         public  Dictionary<string, Dictionary<Protein, (double, double)>> SequenceCoverageByProtease = new Dictionary<string, Dictionary<Protein, (double, double)>>();
         public override MyTaskResults RunSpecific(string OutputFolder, List<DbForDigestion> dbFileList)
@@ -272,7 +272,7 @@ namespace Tasks
 
         public static int CountModificationsThatShiftMobility(IEnumerable<Modification> modifications)
         {
-            List<string> shiftingModifications = new List<string> { "Acetylation", "Ammonia loss", "Carbamyl", "Deamidation", "Formylation",
+            List<string> shiftingModifications = new List<string> { "Acetylation", "Ammonia loss", "Carbamyl", "Deamidation", "Formylation,
                 "N2-acetylarginine", "N6-acetyllysine", "N-acetylalanine", "N-acetylaspartate", "N-acetylcysteine", "N-acetylglutamate", "N-acetylglycine",
                 "N-acetylisoleucine", "N-acetylmethionine", "N-acetylproline", "N-acetylserine", "N-acetylthreonine", "N-acetyltyrosine", "N-acetylvaline",
                 "Phosphorylation", "Phosphoserine", "Phosphothreonine", "Phosphotyrosine", "Sulfonation" };
