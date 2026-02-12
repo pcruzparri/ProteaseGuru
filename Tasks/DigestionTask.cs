@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using Chromatography.RetentionTimePrediction;
 using Chromatography.RetentionTimePrediction.Chronologer;
+using PredictionClients.Koina.SupportedModels;
 using Engine;
 using Omics.Modifications;
 using Proteomics;
@@ -9,6 +10,7 @@ using Proteomics.ProteolyticDigestion;
 using Proteomics.RetentionTimePrediction;
 using SharpLearning.Common.Interfaces;
 using UsefulProteomicsDatabases;
+using PredictionClients.Koina.SupportedModels.FlyabilityModels;
 
 namespace Tasks
 {
@@ -166,6 +168,34 @@ namespace Tasks
             var mobilityValues = BatchCalculateElectrophoreticMobility(allPeptides);
             var retentionTimesChronologer = BatchCalculateRetentionTimesChronologer(allPeptides);
 
+            // For Pfly, we need to exclude peptides that are too long (e.g., >40 amino acids) because the
+            // model cannot process them and the output will be of different length than the input list,
+            // which breaks our indexing. If we know the indices of the long peptides, we can insert nulls
+            // back into the Pfly results to maintain alignment.
+            var whereTooLong = new HashSet<int>(
+                allPeptides.Select((p, index) => new { Peptide = p, Index = index })
+                    .Where(x => x.Peptide.BaseSequence.Length > 40)
+                    .Select(x => x.Index)
+            );
+
+            var validPeptides = allPeptides.Where(p => p.BaseSequence.Length <= 40).ToList();
+            var predictions = BatchCalculateDetectabilitiesPfly(validPeptides).Result;
+
+            var pflyDetectabilities = new List<bool?>(allPeptides.Count);
+            int validIndex = 0;
+
+            for (int i = 0; i < allPeptides.Count; i++)
+            {
+                if (whereTooLong.Contains(i))
+                {
+                    pflyDetectabilities.Add(null);
+                }
+                else
+                {
+                    pflyDetectabilities.Add(predictions[validIndex++]);
+                }
+            }
+
             // Create a lookup from peptide to its calculated values
             var peptideToIndex = new Dictionary<PeptideWithSetModifications, int>();
 
@@ -208,6 +238,7 @@ namespace Tasks
                         hydrophobicityValues[index],
                         mobilityValues[index],
                         retentionTimesChronologer[index],  // Add this new parameter
+                        pflyDetectabilities[index],
                         peptide.Length,
                         peptide.MonoisotopicMass,
                         databaseName,
@@ -255,6 +286,14 @@ namespace Tasks
                 }
             }
 
+            return results;
+        }
+
+        private async Task<List<bool?>> BatchCalculateDetectabilitiesPfly(List<PeptideWithSetModifications> peptides)
+        {
+            var predictor = new PFly2024FineTuned(peptides.Select(p => p.BaseSequence).ToList(), out var warnings);
+            await predictor.RunInferenceAsync();
+            var results = predictor.Predictions.Select(p => (bool?) (p.DetectabilityProbabilities.NotDetectable < 0.5)).ToList();
             return results;
         }
 
@@ -521,7 +560,7 @@ namespace Tasks
 
             string header = "Database" + tab + "Protease" + tab + "Base Sequence" + tab + "Full Sequence" + tab + "Previous Amino Acid" + tab +
                 "Next Amino Acid" + tab + "Start Residue" + tab + "End Residue" + tab + "Length" + tab + "Molecular Weight" + tab + "Protein Accession" + tab + "Protein Name" + tab + "Unique Peptide (in this database)" + tab + "Unique Peptide (in all databases)" + tab + "Peptide sequence exclusive to this Database" + tab +
-                "Hydrophobicity" + tab + "Electrophoretic Mobility" + tab + "Chronologer Retention Time";
+                "Hydrophobicity" + tab + "Electrophoretic Mobility" + tab + "Chronologer Retention Time" + tab + "Pfly Detectability";
             List<InSilicoPep> allPeptides = new List<InSilicoPep>();
             Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>> peptideByFileUpdated = new Dictionary<string, Dictionary<string, Dictionary<Protein, List<InSilicoPep>>>>();
             if (peptideByFile.Count > 1)

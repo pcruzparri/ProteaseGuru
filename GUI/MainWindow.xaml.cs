@@ -939,13 +939,16 @@ namespace GUI
 
                         // Handle Chronologer RT - use -1 as default for older files without this column
                         double chronologerRetentionTime = -1;
+                        bool? pflyDetectability = null;
                         if (info.Length > 17)
                         {
                             chronologerRetentionTime = Convert.ToDouble(info[17]);
+                            pflyDetectability = Convert.ToBoolean(info[18]);
+
                         }
 
                         InSilicoPep pep = new InSilicoPep(baseSeq, fullSeq, previousAA, nextAA, unique, hydrophobicity, electrophoreticMobility,
-                            chronologerRetentionTime, length, molecularWeight, database, protein, proteinName, start, end, protease);
+                            chronologerRetentionTime, pflyDetectability, length, molecularWeight, database, protein, proteinName, start, end, protease);
                         pep.UniqueAllDbs = uniqueAll;
                         pep.SeqOnlyInThisDb = oneDb;
                         allpeptides.Add(pep);
