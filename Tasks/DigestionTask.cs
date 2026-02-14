@@ -161,32 +161,35 @@ namespace Tasks
             );
 
             // ============================================================================
-            // PHASE 2: Batch calculate hydrophobicity and electrophoretic mobility
+            // PHASE 2: Batch calculate hydrophobicity, electrophoretic mobility,
+            //          retention times, and detectabilities.
             // ============================================================================
     
             var hydrophobicityValues = BatchCalculateHydrophobicity(allPeptides);
             var mobilityValues = BatchCalculateElectrophoreticMobility(allPeptides);
             var retentionTimesChronologer = BatchCalculateRetentionTimesChronologer(allPeptides);
 
+            // TEMPORARY. THIS WILL BE MIGRATED AND HANDLED BY THE MODEL.
             // For Pfly, we need to exclude peptides that are too long (e.g., >40 amino acids) because the
             // model cannot process them and the output will be of different length than the input list,
             // which breaks our indexing. If we know the indices of the long peptides, we can insert nulls
             // back into the Pfly results to maintain alignment.
-            var whereTooLong = new HashSet<int>(
+            var whereNotValid = new HashSet<int>(
                 allPeptides.Select((p, index) => new { Peptide = p, Index = index })
-                    .Where(x => x.Peptide.BaseSequence.Length > 40)
+                    .Where(x => (x.Peptide.BaseSequence.Length > 40) ||
+                                 !x.Peptide.BaseSequence.All(aa => "ACDEFGHIKLMNPQRSTVWY".Contains(aa))) // also exclude peptides with non-standard amino acids that Pfly can't handle
                     .Select(x => x.Index)
             );
-
-            var validPeptides = allPeptides.Where(p => p.BaseSequence.Length <= 40).ToList();
+            var validPeptides = allPeptides
+                .Where((peptide, index) => !whereNotValid.Contains(index))
+                .ToList();
             var predictions = BatchCalculateDetectabilitiesPfly(validPeptides).Result;
 
             var pflyDetectabilities = new List<bool?>(allPeptides.Count);
-            int validIndex = 0;
-
+            var validIndex = 0;
             for (int i = 0; i < allPeptides.Count; i++)
             {
-                if (whereTooLong.Contains(i))
+                if (whereNotValid.Contains(i))
                 {
                     pflyDetectabilities.Add(null);
                 }
@@ -291,10 +294,62 @@ namespace Tasks
 
         private async Task<List<bool?>> BatchCalculateDetectabilitiesPfly(List<PeptideWithSetModifications> peptides)
         {
-            var predictor = new PFly2024FineTuned(peptides.Select(p => p.BaseSequence).ToList(), out var warnings);
-            await predictor.RunInferenceAsync();
-            var results = predictor.Predictions.Select(p => (bool?) (p.DetectabilityProbabilities.NotDetectable < 0.5)).ToList();
-            return results;
+            // We need to limit the number of peptides sent to Pfly in each call to avoid gateway timeouts.
+            // 50k peptides per call is a conservative balance between performance and reliability.
+            // Gateway timeouts are between 1-5 minutes (google search). So, in theory, we should be sending requests
+            // with roughly 150k peptides (60s * 20 peptides/second * 128 peptides per batch = 153,600) to
+            // about 450k peptides (150k peptides/min * 5 min) to fully utilize the time limit. However, to be safe
+            // and account for variability in processing time, we will use a lower limit of 50k peptides per call.
+            const int maxPeptidesPerCall = 50000; // Peptide limit per call to Pfly to avoid gateway timeouts
+            var allResults = new List<bool?>(peptides.Count);
+
+            // If the dataset is small enough, process it in one call
+            if (peptides.Count <= maxPeptidesPerCall)
+            {
+                var predictor = new PFly2024FineTuned(peptides.Select(p => p.BaseSequence).ToList(), out var warnings);
+                await predictor.RunInferenceAsync();
+                return predictor.Predictions.Select(p => (bool?)(p.DetectabilityProbabilities.NotDetectable < 0.5)).ToList();
+            }
+
+            // For large datasets, split into multiple calls to prevent gateway timeouts
+            int totalChunks = (int)Math.Ceiling((double)peptides.Count / maxPeptidesPerCall);
+            
+            for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++)
+            {
+                int startIndex = chunkIndex * maxPeptidesPerCall;
+                int currentChunkSize = Math.Min(maxPeptidesPerCall, peptides.Count - startIndex);
+                var chunk = peptides.GetRange(startIndex, currentChunkSize);
+
+                try
+                {
+                    Status($"Calculating Pfly detectability: chunk {chunkIndex + 1}/{totalChunks} ({currentChunkSize} peptides)...", "pfly");
+                    
+                    var predictor = new PFly2024FineTuned(
+                        chunk.Select(p => p.BaseSequence).ToList(), 
+                        out var warnings);
+                    await predictor.RunInferenceAsync();
+                    
+                    var chunkResults = predictor.Predictions
+                        .Select(p => (bool?)(p.DetectabilityProbabilities.NotDetectable < 0.5))
+                        .ToList();
+                    
+                    allResults.AddRange(chunkResults);
+                }
+                catch (Exception ex)
+                {
+                    // If a chunk fails, log warning and add null values to maintain alignment
+                    Warn($"Pfly prediction failed for chunk {chunkIndex + 1}/{totalChunks}: {ex.Message}");
+                    allResults.AddRange(Enumerable.Repeat<bool?>(null, currentChunkSize));
+                }
+
+                // Small delay between chunks to avoid overwhelming the service
+                if (chunkIndex < totalChunks - 1)
+                {
+                    await Task.Delay(50);
+                }
+            }
+
+            return allResults;
         }
 
         /// <summary>
