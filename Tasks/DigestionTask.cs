@@ -195,8 +195,9 @@ namespace Tasks
                 }
                 else
                 {
-                    pflyDetectabilities.Add(predictions[validIndex++]);
+                    pflyDetectabilities.Add(predictions[validIndex]);
                 }
+                validIndex++;
             }
 
             // Create a lookup from peptide to its calculated values
