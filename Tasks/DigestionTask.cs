@@ -682,7 +682,7 @@ namespace Tasks
                 "Next Amino Acid", "Start Residue", "End Residue", "Length", "Molecular Weight",
                 "Protein Accession", "Protein Name", "Unique Peptide (in this database)",
                 "Unique Peptide (in all databases)", "Peptide sequence exclusive to this Database",
-                "Hydrophobicity", "Electrophoretic Mobility", "Chronologer Retention Time");
+                "Hydrophobicity", "Electrophoretic Mobility", "Chronologer Retention Time", "Pfly Detectability");
 
             var allPeptides = new List<InSilicoPep>();
 
