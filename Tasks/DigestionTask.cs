@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data;
 using Chromatography.RetentionTimePrediction.Chronologer;
-using PredictionClients.Koina.SupportedModels;
 using Engine;
 using Omics;
 using Omics.Modifications;
@@ -223,12 +222,14 @@ namespace Tasks
             double[] hydrophobicityValues = new double[allPeptides.Count];
             double[] mobilityValues = new double[allPeptides.Count];
             double[] retentionTimesChronologer = new double[allPeptides.Count];
+            bool?[] pflyDetectabilities = new bool?[allPeptides.Count];
 
             if (allPeptides.Count == allWithSetMods.Count)
             {
                 hydrophobicityValues = BatchCalculateHydrophobicity(allPeptides);
                 mobilityValues = BatchCalculateElectrophoreticMobility(allPeptides);
                 retentionTimesChronologer = BatchCalculateRetentionTimesChronologer(allPeptides);
+                pflyDetectabilities = BatchCalculateDetectabilitiesPfly(allPeptides);
             }
 
             // Create a lookup from peptide to its calculated values
@@ -397,64 +398,14 @@ namespace Tasks
             return results;
         }
 
-        private async Task<List<bool?>> BatchCalculateDetectabilitiesPfly(List<PeptideWithSetModifications> peptides)
+        private bool?[] BatchCalculateDetectabilitiesPfly(List<PeptideWithSetModifications> peptides)
         {
-            // We need to limit the number of peptides sent to Pfly in each call to avoid gateway timeouts.
-            // 50k peptides per call is a conservative balance between performance and reliability.
-            // Gateway timeouts are between 1-5 minutes (google search). So, in theory, we should be sending requests
-            // with roughly 150k peptides (60s * 20 peptides/second * 128 peptides per batch = 153,600) to
-            // about 450k peptides (150k peptides/min * 5 min) to fully utilize the time limit. However, to be safe
-            // and account for variability in processing time, we will use a lower limit of 50k peptides per call.
-            const int maxPeptidesPerCall = 50000; // Peptide limit per call to Pfly to avoid gateway timeouts
-            var allResults = new List<bool?>(peptides.Count);
+            var inputs = peptides.Select(p => new DetectabilityPredictionInput(p.FullSequence)).ToList();
+            var model = new PFly2024FineTuned();
+            List<PeptideDetectabilityPrediction> results = model.Predict(inputs);
+            var predictedDetectability = results.Select(r => r.DetectabilityProbabilities.HasValue ? r.DetectabilityProbabilities.Value.NotDetectable < 0.5 : (bool?)null).ToArray();
+            return predictedDetectability;
 
-            // If the dataset is small enough, process it in one call
-            if (peptides.Count <= maxPeptidesPerCall)
-            {
-                var predictor = new PFly2024FineTuned(peptides.Select(p => p.BaseSequence).ToList(), out var warnings);
-                await predictor.RunInferenceAsync();
-                return predictor.Predictions.Select(p => (bool?)(p.DetectabilityProbabilities.NotDetectable < 0.5)).ToList();
-            }
-
-            // For large datasets, split into multiple calls to prevent gateway timeouts
-            int totalChunks = (int)Math.Ceiling((double)peptides.Count / maxPeptidesPerCall);
-            
-            for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++)
-            {
-                int startIndex = chunkIndex * maxPeptidesPerCall;
-                int currentChunkSize = Math.Min(maxPeptidesPerCall, peptides.Count - startIndex);
-                var chunk = peptides.GetRange(startIndex, currentChunkSize);
-
-                try
-                {
-                    Status($"Calculating Pfly detectability: chunk {chunkIndex + 1}/{totalChunks} ({currentChunkSize} peptides)...", "pfly");
-                    
-                    var predictor = new PFly2024FineTuned(
-                        chunk.Select(p => p.BaseSequence).ToList(), 
-                        out var warnings);
-                    await predictor.RunInferenceAsync();
-                    
-                    var chunkResults = predictor.Predictions
-                        .Select(p => (bool?)(p.DetectabilityProbabilities.NotDetectable < 0.5))
-                        .ToList();
-                    
-                    allResults.AddRange(chunkResults);
-                }
-                catch (Exception ex)
-                {
-                    // If a chunk fails, log warning and add null values to maintain alignment
-                    Warn($"Pfly prediction failed for chunk {chunkIndex + 1}/{totalChunks}: {ex.Message}");
-                    allResults.AddRange(Enumerable.Repeat<bool?>(null, currentChunkSize));
-                }
-
-                // Small delay between chunks to avoid overwhelming the service
-                if (chunkIndex < totalChunks - 1)
-                {
-                    await Task.Delay(50);
-                }
-            }
-
-            return allResults;
         }
 
         /// <summary>
@@ -682,7 +633,7 @@ namespace Tasks
                 "Next Amino Acid", "Start Residue", "End Residue", "Length", "Molecular Weight",
                 "Protein Accession", "Protein Name", "Unique Peptide (in this database)",
                 "Unique Peptide (in all databases)", "Peptide sequence exclusive to this Database",
-                "Hydrophobicity", "Electrophoretic Mobility", "Chronologer Retention Time", "Pfly Detectability");
+                "Hydrophobicity", "Electrophoretic Mobility", "Chronologer Retention Time", "Pfly Detectability (>=0.5)");
 
             var allPeptides = new List<InSilicoPep>();
 
