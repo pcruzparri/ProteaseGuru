@@ -144,7 +144,8 @@
                     </StackPanel>
 
                     <!-- Protein Selection -->
-                    <StackPanel Orientation="Vertical" Width="250">
+                    <StackPanel Orientation="Vertical" Width="250"
+                                x:Name="proteinSelectionPanel">
                         <Label Content="Protein Selection (Multi-select)" Style="{StaticResource SectionHeaderStyle}"/>
 
                         <DockPanel Margin="15,0,15,5">
@@ -184,11 +185,15 @@
                         </StackPanel>
 
                         <!-- Charge States -->
-                        <StackPanel Orientation="Horizontal" Margin="15,5">
+                        <StackPanel Orientation="Horizontal" Margin="15,5"
+                                    ToolTip="Charge states above 6 are not supported by Prosit 2020 HCD.">
                             <Label Content="Charge States to Predict:" FontWeight="Bold" Margin="15,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            <CheckBox x:Name="cbCharge1" Content="1+" IsChecked="False" Margin="5,5" VerticalAlignment="Center"/>
                             <CheckBox x:Name="cbCharge2" Content="2+" IsChecked="True" Margin="5,5" VerticalAlignment="Center"/>
                             <CheckBox x:Name="cbCharge3" Content="3+" IsChecked="True" Margin="5,5" VerticalAlignment="Center"/>
                             <CheckBox x:Name="cbCharge4" Content="4+" IsChecked="False" Margin="5,5" VerticalAlignment="Center"/>
+                            <CheckBox x:Name="cbCharge5" Content="5+" IsChecked="False" Margin="5,5" VerticalAlignment="Center"/>
+                            <CheckBox x:Name="cbCharge6" Content="6+" IsChecked="False" Margin="5,5" VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <!-- Collision Energy -->
@@ -208,11 +213,13 @@
                                 <ToolTip Content="If checked, peptides with unsupported modifications will be excluded from the export. If unchecked, the unsupported modifications will be removed and a prediction will be generated." FontSize="10" Margin="35,0,5,5"/>
                             </CheckBox.ToolTip>
                         </CheckBox>
-                        <CheckBox x:Name="cbExcludeUndetectablePeptides" Content="Exclude Undetectable Peptides" IsChecked="False" Margin="15,5" FontWeight="Bold">
-                            <CheckBox.ToolTip>
-                                <ToolTip Content="If checked, peptides predicted to have low detectability will be excluded." FontSize="10" Margin="35,0,5,5"/>
-                            </CheckBox.ToolTip>
-                        </CheckBox>
+                        <StackPanel x:Name="undetectableFilterContainer" Orientation="Horizontal">
+                            <CheckBox x:Name="cbExcludeUndetectablePeptides" Content="Exclude Undetectable Peptides" IsChecked="False" Margin="15,5" FontWeight="Bold">
+                                <CheckBox.ToolTip>
+                                    <ToolTip Content="If checked, peptides predicted to have low detectability will be excluded." FontSize="10" Margin="35,0,5,5"/>
+                                </CheckBox.ToolTip>
+                            </CheckBox>
+                        </StackPanel>
                     </StackPanel>
                 </Expander>
 

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -64,6 +65,9 @@ namespace GUI
         // ── Display mode toggle ──────────────────────────────────────────────
         private CoverageMapDisplayMode _displayMode = CoverageMapDisplayMode.PeptidePerBar;
 
+        // ── Spectral library export cancellation ─────────────────────────────
+        private CancellationTokenSource? _exportCts;
+
         // ── Peptide-per-bar mode fields ───────────────────────────────────────
         private Dictionary<string, Color> ProteaseByColor;
 
@@ -85,6 +89,7 @@ namespace GUI
             Dictionary<string, Dictionary<IBioPolymer, (double, double)>> sequenceCoverageByProtease)
         {
             InitializeComponent();
+            this.Unloaded += OnUnloaded;
 
             _analyzer = new ProteinCoverageAnalyzer(peptideByFile, sequenceCoverageByProtease);
             UserParams = userParams;
@@ -478,6 +483,13 @@ namespace GUI
             SearchModifications.Timer.Tick -= searchBox_TextChangedHandler;
         }
 
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            _exportCts?.Cancel();
+            _exportCts?.Dispose();
+            _exportCts = null;
+        }
+
         #endregion
 
         #region Export Functionality
@@ -674,6 +686,12 @@ namespace GUI
         private async Task ExecuteSpectralLibraryExportAsync(SpectralLibraryExportOptions options)
         {
             NotificationService.Instance.AddNotification("Starting spectral library export...", NotificationType.Information);
+            exportSpectralLibraryButton.IsEnabled = false;
+                _exportCts?.Cancel();
+                _exportCts?.Dispose();
+                _exportCts = new CancellationTokenSource();
+                var ct = _exportCts.Token;
+
             try
             {
                 var saveDialog = new Microsoft.Win32.SaveFileDialog
@@ -688,7 +706,7 @@ namespace GUI
                     return;
                 }
 
-                var peptidesToExport = GetPeptidesForSpectralLibraryExport(options);
+                var peptidesToExport = SpectralLibraryPostDigestionAdapter.PreparePeptides(_analyzer, options);
 
                 if (!peptidesToExport.Any())
                 {
@@ -703,43 +721,22 @@ namespace GUI
                     options,
                     saveDialog.FileName);
 
-                Mouse.OverrideCursor = Cursors.Wait;
-                var result = await Task.Run(() => generator.GenerateLibrary());
-                Mouse.OverrideCursor = null;
+                var result = await generator.GenerateLibraryAsync(cancellationToken: ct);
 
                 NotificationService.Instance.AddNotification($"Spectral library generated with {result.Count} spectra. File saved to: {saveDialog.FileName}", NotificationType.Success);
             }
+            catch (OperationCanceledException)
+            {
+                NotificationService.Instance.AddNotification("Export cancelled.", NotificationType.Information);
+            }
             catch (Exception ex)
             {
-                Mouse.OverrideCursor = null;
                 NotificationService.Instance.AddNotification($"Error generating spectral library: {ex.Message}\n\n{ex.StackTrace}", NotificationType.Error);
             }
-        }
-
-        /// <summary>
-        /// Gathers peptides for export based on user selections
-        /// </summary>
-        private List<InSilicoPep> GetPeptidesForSpectralLibraryExport(SpectralLibraryExportOptions options)
-        {
-            var peptides = new HashSet<InSilicoPep>(); 
-
-            // Get Protein objects from selected protein accessions
-            var selectedProteins = _analyzer.ProteinCoverageResults.Keys
-                .Where(p => options.SelectedProteins.Contains(p.Accession))
-                .ToList();
-
-            // Gather peptides for each protein-protease combination
-            foreach (var protein in selectedProteins)
+            finally
             {
-                foreach (var proteaseName in options.SelectedProteases)
-                {
-                    var proteinPeptides = _analyzer.GetPeptidesForProteinAndProtease(protein, proteaseName);
-                    peptides.UnionWith(proteinPeptides);
-                }
+                exportSpectralLibraryButton.IsEnabled = true;
             }
-            peptides = options.ExcludeUndetectablePeptides ? peptides.Where(p => p.PflyDetectability == true).ToHashSet()
-                : peptides;
-            return peptides.DistinctBy(p => p.FullSequence).ToList();
         }
 
         private string GetFileFilterForSpectralLibrary(string format)

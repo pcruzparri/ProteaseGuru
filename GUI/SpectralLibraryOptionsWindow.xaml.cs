@@ -16,6 +16,8 @@ namespace GUI
         private HashSet<string> _selectedProteins = new();
         private bool _isRefreshingProteinFilter;
 
+        private readonly bool _allowProteinSelection;
+
         /// <summary>
         /// Constructor for spectral library options window
         /// </summary>
@@ -23,13 +25,29 @@ namespace GUI
         /// <param name="availableProteins">List of protein accessions available in the digestion results</param>
         /// <param name="currentlySelectedProteases">Currently selected proteases in ProteinResultsWindow (will be pre-selected)</param>
         /// <param name="currentlySelectedProtein">Currently selected protein in ProteinResultsWindow (will be pre-selected)</param>
+        /// <param name="allowProteinSelection">If false, hides the protein panel and auto-selects the single provided protein.</param>
         public SpectralLibraryOptionsWindow(
             List<string> availableProteases,
             List<string> availableProteins,
             List<string>? currentlySelectedProteases = null,
-            string? currentlySelectedProtein = null)
+            string? currentlySelectedProtein = null,
+            bool allowProteinSelection = true)
         {
             InitializeComponent();
+            _allowProteinSelection = allowProteinSelection;
+
+            if (!allowProteinSelection)
+            {
+                if (availableProteins.Count != 1)
+                {
+                    throw new ArgumentException(
+                        "When protein selection is disabled, exactly one protein must be provided.",
+                        nameof(availableProteins));
+                }
+
+                proteinSelectionPanel.Visibility = Visibility.Collapsed;
+                undetectableFilterContainer.Visibility = Visibility.Collapsed;
+            }
 
             // Initialize collections
             _allProteases = new ObservableCollection<string>(availableProteases.OrderBy(p => p));
@@ -52,7 +70,11 @@ namespace GUI
                 }
             }
 
-            if (!string.IsNullOrEmpty(currentlySelectedProtein) && _allProteins.Contains(currentlySelectedProtein))
+            if (!allowProteinSelection)
+            {
+                _selectedProteins.Add(availableProteins[0]);
+            }
+            else if (!string.IsNullOrEmpty(currentlySelectedProtein) && _allProteins.Contains(currentlySelectedProtein))
             {
                 _selectedProteins.Add(currentlySelectedProtein);
                 lbProteins.SelectedItems.Add(currentlySelectedProtein);
@@ -127,8 +149,8 @@ namespace GUI
                 return false;
             }
 
-            // Validate proteins selected
-            if (_selectedProteins.Count == 0)
+            // Validate proteins selected (skip when protein selection is not allowed)
+            if (_allowProteinSelection && _selectedProteins.Count == 0)
             {
                 var result = MessageBox.Show("Please select at least one protein." , "No Protein Selected",
                     MessageBoxButton.OK, MessageBoxImage.Error);
@@ -187,10 +209,11 @@ namespace GUI
                 return false;
             }
 
-            // Validate intensity rank threshold if checked (IntegerTextBoxControl handles bounds, just check if empty)
-            if (cbEnableIntensityRankFiltering.IsChecked == true && string.IsNullOrWhiteSpace(tbRankThreshold.Text))
+            // Validate intensity rank threshold if checked
+            if (cbEnableIntensityRankFiltering.IsChecked == true &&
+                (!int.TryParse(tbRankThreshold.Text, out int rank) || rank <= 0))
             {
-                MessageBox.Show("Please enter a valid intensity rank threshold.", "Invalid Input",
+                MessageBox.Show("Please enter a valid positive integer for the intensity rank threshold.", "Invalid Input",
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -209,9 +232,12 @@ namespace GUI
         private List<int> GetSelectedChargeStates()
         {
             var charges = new List<int>();
+            if (cbCharge1.IsChecked == true) charges.Add(1);
             if (cbCharge2.IsChecked == true) charges.Add(2);
             if (cbCharge3.IsChecked == true) charges.Add(3);
             if (cbCharge4.IsChecked == true) charges.Add(4);
+            if (cbCharge5.IsChecked == true) charges.Add(5);
+            if (cbCharge6.IsChecked == true) charges.Add(6);
             return charges;
         }
 

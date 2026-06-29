@@ -75,6 +75,7 @@ namespace GUI
 
             WireProteasePanel();
             this.Loaded += results_Loaded;
+            this.Unloaded += OnUnloaded;
             SearchModifications.SetUp();
             SearchModifications.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
         }
@@ -104,6 +105,7 @@ namespace GUI
 
             WireProteasePanel();
             this.Loaded += results_Loaded;
+            this.Unloaded += OnUnloaded;
             SearchModifications.SetUp();
             SearchModifications.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
         }
@@ -408,76 +410,117 @@ namespace GUI
             maxCoverageLegend.Width = canvasWidth;
         }
 
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            _exportCts?.Cancel();
+            _exportCts?.Dispose();
+            _exportCts = null;
+        }
+
         private async void ExportSpectrumLibrary_Click(object sender, RoutedEventArgs e)
         {
             if (SelectedProtein == null)
             {
-                ExportStatusLabel.Text = "Select a protein first.";
+                MessageBox.Show("Select a protein first.", "No Protein Selected",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var checkedProteases = _allProteaseVm.ProteaseSpecificParameters
+            var checkedProteaseVms = _allProteaseVm.ProteaseSpecificParameters
                 .Where(vm => vm.IsSelected && vm.IsVisible)
                 .ToList();
 
-            if (checkedProteases.Count == 0)
+            if (checkedProteaseVms.Count == 0)
             {
-                ExportStatusLabel.Text = "Select at least one protease first.";
+                MessageBox.Show("Select at least one protease first.", "No Protease Selected",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (NceComboBox.SelectedItem is not ComboBoxItem nceItem ||
-                !int.TryParse(nceItem.Content?.ToString(), out int nce))
-            {
-                ExportStatusLabel.Text = "Select a collision energy value.";
-                return;
-            }
+            var allProteaseNames = _allProteaseVm.ProteaseSpecificParameters
+                .Select(vm => vm.ProteaseSpecificParams.DigestionAgentName)
+                .Distinct()
+                .ToList();
 
-            var chargeStates = new List<int>();
-            if (chk1.IsChecked == true) chargeStates.Add(1);
-            if (chk2.IsChecked == true) chargeStates.Add(2);
-            if (chk3.IsChecked == true) chargeStates.Add(3);
-            if (chk4.IsChecked == true) chargeStates.Add(4);
-            if (chk5.IsChecked == true) chargeStates.Add(5);
-            if (chk6.IsChecked == true) chargeStates.Add(6);
-            if (chk7.IsChecked == true) chargeStates.Add(7);
+            var checkedProteaseNames = checkedProteaseVms
+                .Select(vm => vm.ProteaseSpecificParams.DigestionAgentName)
+                .ToList();
 
-            if (chargeStates.Count == 0)
-            {
-                ExportStatusLabel.Text = "Select at least one charge state.";
+            var optionsWindow = new SpectralLibraryOptionsWindow(
+                availableProteases: allProteaseNames,
+                availableProteins: new List<string> { SelectedProtein.Protein.Accession },
+                currentlySelectedProteases: checkedProteaseNames,
+                currentlySelectedProtein: SelectedProtein.Protein.Accession,
+                allowProteinSelection: false);
+
+            optionsWindow.Owner = Window.GetWindow(this);
+            optionsWindow.ShowDialog();
+
+            if (!optionsWindow.DialogResultOk)
                 return;
-            }
+
+            var options = optionsWindow.ExportOptions;
+
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "MSP Files (*.msp)|*.msp",
+                DefaultExt = ".msp",
+                FileName = $"{SelectedProtein.Protein.Accession}_SpecLib_{DateTime.Now:yyyyMMdd_HHmmss}",
+                InitialDirectory = !string.IsNullOrWhiteSpace(_fastaPath) && System.IO.File.Exists(_fastaPath)
+                    ? System.IO.Path.GetDirectoryName(_fastaPath)
+                    : System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "ProteaseGuru",
+                        "SpectrumLibraries")
+            };
+
+            if (saveDialog.ShowDialog() != true)
+                return;
 
             ExportSpectrumLibraryButton.IsEnabled = false;
             _exportCts?.Cancel();
+            _exportCts?.Dispose();
             _exportCts = new CancellationTokenSource();
             var ct = _exportCts.Token;
 
-            var progress = new Progress<string>(msg =>
-                Dispatcher.Invoke(() => ExportStatusLabel.Text = msg));
-
             try
             {
-                var proteaseParams = checkedProteases.Select(vm => vm.ProteaseSpecificParams).ToList();
+                var proteaseParams = _allProteaseVm.ProteaseSpecificParameters
+                    .Where(vm => options.SelectedProteases.Contains(vm.ProteaseSpecificParams.DigestionAgentName))
+                    .Select(vm => vm.ProteaseSpecificParams)
+                    .ToList();
 
-                string outputPath = await SpectrumLibraryExporter.ExportAsync(
+                IProgress<string>? progress = null; // No inline status label anymore; could add a status bar later
+
+                var peptides = await SpectralLibraryIndividualProteinAdapter.PreparePeptidesAsync(
                     protein: SelectedProtein.Protein,
                     proteaseParams: proteaseParams,
-                    chargeStates: chargeStates,
-                    nce: nce,
-                    fastaPath: _fastaPath,
+                    excludeIncompatiblePeptides: options.ExcludeIncompatiblePeptides,
                     progress: progress,
                     cancellationToken: ct);
 
-                ExportStatusLabel.Text = $"✓ Library saved: {System.IO.Path.GetFileName(outputPath)}";
+                if (peptides.Count == 0)
+                {
+                    MessageBox.Show("No peptides passed the Prosit filter for the selected options.",
+                        "No Peptides", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var generator = new SpectralLibraryGenerator(peptides, options, saveDialog.FileName);
+                var result = await generator.GenerateLibraryAsync(progress, ct);
+
+                NotificationService.Instance.AddNotification(
+                    $"Spectral library generated with {result.Count} spectra. File saved to: {saveDialog.FileName}",
+                    NotificationType.Success);
             }
             catch (OperationCanceledException)
             {
-                ExportStatusLabel.Text = "Export cancelled.";
+                NotificationService.Instance.AddNotification("Export cancelled.", NotificationType.Information);
             }
             catch (Exception ex)
             {
-                ExportStatusLabel.Text = $"Export failed: {ex.Message}";
+                NotificationService.Instance.AddNotification(
+                    $"Error generating spectral library: {ex.Message}", NotificationType.Error);
             }
             finally
             {

@@ -323,7 +323,8 @@
                     </Button>
                     <Button x:Name="exportSpectralLibraryButton" Content="Export Spectral Library" Click="ExportSpectralLibrary" Grid.Row="3" Width="200"  HorizontalAlignment="Right" Margin="0,0,20,0"
                             Style="{StaticResource ImportantButtonStyle}"
-                            ToolTip="Generate in silico spectral library from digestion results"/>
+                            ToolTip="Generate in silico spectral library from digestion results"
+                            Visibility="{Binding Source={x:Static guiFunctions:GuiGlobalParamsViewModel.Instance}, Path=IsRnaMode, Converter={StaticResource CollapseOnRna}}"/>
 
                 </Grid>
             </Grid>
