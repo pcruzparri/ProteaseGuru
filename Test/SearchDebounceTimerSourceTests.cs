@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 
 namespace ProteaseGuru.Test
@@ -43,7 +44,9 @@ namespace ProteaseGuru.Test
         {
             var source = ReadGuiSource("SearchModifications.cs");
 
-            Assert.That(source, Does.Not.Contain("static DispatcherTimer"),
+            Assert.That(Regex.IsMatch(source,
+                    @"\bstatic\b[^;{}\r\n]*\bDispatcherTimer\b|\bDispatcherTimer\b[^;{}\r\n]*\bstatic\b"),
+                Is.False,
                 "SearchModifications must not go back to a static DispatcherTimer field; a static " +
                 "timer is exactly the bug that let one window's constructor steal another window's " +
                 "Tick subscription.");
@@ -58,7 +61,9 @@ namespace ProteaseGuru.Test
         {
             var source = ReadGuiSource(fileName);
 
-            Assert.That(source, Does.Contain("private readonly SearchModifications _searchDebounce"),
+            Assert.That(Regex.IsMatch(source,
+                    @"\bprivate\s+readonly\s+SearchModifications\s+_searchDebounce\s*=\s*new\s+SearchModifications\s*\(\s*\)\s*;"),
+                Is.True,
                 $"{fileName} must hold the debounce timer as its own private instance field, " +
                 "constructed per window, so it can never be shared with another window.");
             Assert.That(source, Does.Not.Contain("SearchModifications.SetUp()"),
