@@ -28,6 +28,14 @@ namespace ProteaseGuru.Gui
         private DigestionConditionsSetupViewModel _allProteaseVm;
         private readonly SeekMaximumCoverage _seeker = new SeekMaximumCoverage();
 
+        /// <summary>
+        /// Instance-scoped search debounce timer for this window's search box.
+        /// Must not be shared/static: a shared timer lets a second window's
+        /// constructor steal this window's Tick subscription (see
+        /// SearchModifications for the regression this guards against).
+        /// </summary>
+        private readonly SearchModifications _searchDebounce = new SearchModifications();
+
         private readonly Dictionary<string, Color> _stableProteaseColors;
         private readonly Dictionary<string, SolidColorBrush> _stableProteaseBrushes;
 
@@ -69,8 +77,7 @@ namespace ProteaseGuru.Gui
 
             WireProteasePanel();
             this.Loaded += results_Loaded;
-            SearchModifications.SetUp();
-            SearchModifications.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
+            _searchDebounce.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
         }
 
         public IndividualProteinAnalyzerWindow(
@@ -95,8 +102,7 @@ namespace ProteaseGuru.Gui
 
             WireProteasePanel();
             this.Loaded += results_Loaded;
-            SearchModifications.SetUp();
-            SearchModifications.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
+            _searchDebounce.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
         }
 
         #endregion
@@ -167,7 +173,7 @@ namespace ProteaseGuru.Gui
         #region Search
 
         private void Search_TextChanged(object sender, TextChangedEventArgs e)
-            => SearchModifications.SetTimer();
+            => _searchDebounce.SetTimer();
 
         private void searchBox_TextChangedHandler(object sender, EventArgs e)
         {
@@ -187,7 +193,7 @@ namespace ProteaseGuru.Gui
             foreach (var entry in filteredList)
                 dataGridProteins.Items.Add(entry);
 
-            SearchModifications.Timer.Stop();
+            _searchDebounce.Timer.Stop();
         }
 
         #endregion
@@ -469,7 +475,7 @@ namespace ProteaseGuru.Gui
 
         void window_Closing(object sender, global::System.ComponentModel.CancelEventArgs e)
         {
-            SearchModifications.Timer.Tick -= searchBox_TextChangedHandler;
+            _searchDebounce.Timer.Tick -= searchBox_TextChangedHandler;
             if (_allProteaseVm != null)
                 foreach (var vm in _allProteaseVm.ProteaseSpecificParameters)
                     vm.PropertyChanged -= OnProteaseParameterChanged;

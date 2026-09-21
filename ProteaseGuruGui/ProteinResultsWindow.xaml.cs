@@ -44,6 +44,14 @@ namespace ProteaseGuru.Gui
         /// <summary>Currently selected proteases for coverage map display</summary>
         private List<string> SelectedProteases;
 
+        /// <summary>
+        /// Instance-scoped search debounce timer for this window's search box.
+        /// Must not be shared/static: a shared timer lets a second window's
+        /// constructor steal this window's Tick subscription (see
+        /// SearchModifications for the regression this guards against).
+        /// </summary>
+        private readonly SearchModifications _searchDebounce = new SearchModifications();
+
         /// <summary>Currently selected protein being displayed</summary>
         private ProteinForTreeView SelectedProtein;
 
@@ -106,8 +114,7 @@ namespace ProteaseGuru.Gui
             ProteaseByColor = rgbColorMap.ToDictionary(kvp => kvp.Key, kvp => ToWpfColor(kvp.Value));
 
             this.Loaded += results_Loaded;
-            SearchModifications.SetUp();
-            SearchModifications.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
+            _searchDebounce.Timer.Tick += new EventHandler(searchBox_TextChangedHandler);
         }
 
         #endregion
@@ -156,7 +163,7 @@ namespace ProteaseGuru.Gui
         /// </summary>
         private void Search_TextChanged(object sender, TextChangedEventArgs e)
         {
-            SearchModifications.SetTimer();
+            _searchDebounce.SetTimer();
         }
 
         /// <summary>
@@ -180,7 +187,7 @@ namespace ProteaseGuru.Gui
                 dataGridProteins.Items.Add(entry);
             }
 
-            SearchModifications.Timer.Stop();
+            _searchDebounce.Timer.Stop();
         }
 
         /// <summary>
@@ -465,7 +472,7 @@ namespace ProteaseGuru.Gui
 
         void window_Closing(object sender, global::System.ComponentModel.CancelEventArgs e)
         {
-            SearchModifications.Timer.Tick -= searchBox_TextChangedHandler;
+            _searchDebounce.Timer.Tick -= searchBox_TextChangedHandler;
         }
 
         #endregion
