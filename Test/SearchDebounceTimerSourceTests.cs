@@ -59,5 +59,30 @@ namespace ProteaseGuru.Test
                 $"{fileName} must not reference a static SearchModifications.Timer; use the " +
                 "instance's own _searchDebounce.Timer field instead.");
         }
+
+        [TestCase("ProteinResultsWindow.xaml.cs")]
+        [TestCase("IndividualProteinAnalyzerWindow.xaml.cs")]
+        public void ClearingSearchInput_RestoresFullListViaItems(string fileName)
+        {
+            var source = ReadGuiSource(fileName);
+
+            var emptyBranchMatch = Regex.Match(source,
+                @"IsNullOrEmpty\(userInput\)\s*\)\s*\{(?<body>.*?)return;",
+                RegexOptions.Singleline);
+
+            Assert.That(emptyBranchMatch.Success, Is.True,
+                $"{fileName} must have an empty-search-input branch that returns after handling it.");
+
+            var body = emptyBranchMatch.Groups["body"].Value;
+
+            // dataGridProteins is a plain ListBox with no ItemsSource binding, so setting DataContext
+            // alone is a no-op for what's visibly displayed. Clearing the search box must repopulate
+            // Items directly, or the grid keeps showing the last filtered subset instead of the full
+            // list (the regression the user found while manually verifying the debounce-timer fix).
+            Assert.That(body, Does.Contain("dataGridProteins.Items.Clear()"),
+                $"{fileName}: clearing the search box must clear dataGridProteins.Items directly.");
+            Assert.That(body, Does.Contain("dataGridProteins.Items.Add("),
+                $"{fileName}: the empty-search branch must repopulate dataGridProteins.Items from the full protein list.");
+        }
     }
 }

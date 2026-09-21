@@ -171,7 +171,11 @@ namespace ProteaseGuru.Gui
 
             if (string.IsNullOrEmpty(userInput))
             {
-                dataGridProteins.DataContext = proteinList;
+                dataGridProteins.Items.Clear();
+                foreach (var entry in proteinList)
+                {
+                    dataGridProteins.Items.Add(entry);
+                }
                 return;
             }
 
