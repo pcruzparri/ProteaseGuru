@@ -6,25 +6,11 @@ using NUnit.Framework;
 namespace ProteaseGuru.Test
 {
     /// <summary>
-    /// Source-level regression guard for the shared search-debounce timer bug fixed on
-    /// fix/protein-results-live-search-shared-timer.
-    ///
-    /// History: SearchModifications used to expose a single `public static DispatcherTimer Timer`.
-    /// ProteinResultsWindow subscribed to it first; when IndividualProteinAnalyzerWindow became a
-    /// second consumer (commit 34572d2, "Seek Maximum Coverage of One Protein by Protease Pairs and
-    /// Triplets (#63)", 2026-04-06), its constructor called the same static SetUp(), which replaced
-    /// the shared Timer object outright and re-subscribed Tick to itself -- so whichever window was
-    /// constructed most recently silently "owned" every other window's debounced keystrokes. User
-    /// report recorded 2026-09-21.
-    ///
-    /// Why source-level, not a WPF unit test: ProteaseGuruGui targets net10.0-windows with
-    /// UseWPF=true, and DispatcherTimer requires the Windows desktop runtime to construct/tick. This
-    /// (ProteaseGuru.Test) project is deliberately cross-platform (net10.0, no WPF reference) so it
-    /// runs outside Windows too; adding a WPF project reference here would break that. These tests
-    /// instead assert the fix's invariants directly against the source text -- exact, fast, and no
-    /// UI thread required. The tradeoff: behavioral/dispatcher-level exercise of the fix (actually
-    /// pumping the timer and confirming ticks route to the right window) still needs a person
-    /// running the app on Windows; this Linux Gateway cannot execute WPF/DispatcherTimer code.
+    /// Source-level guard that the search debounce timer stays instance-scoped per window.
+    /// ProteaseGuruGui is net10.0-windows/WPF and DispatcherTimer needs the Windows desktop
+    /// runtime, so it can't be exercised from this cross-platform test project; these tests
+    /// assert the invariant against the source text instead. Behavioral verification (both
+    /// windows' searches filtering independently) is manual on Windows.
     /// </summary>
     public class SearchDebounceTimerSourceTests
     {

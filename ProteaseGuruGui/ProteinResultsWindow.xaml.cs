@@ -44,12 +44,7 @@ namespace ProteaseGuru.Gui
         /// <summary>Currently selected proteases for coverage map display</summary>
         private List<string> SelectedProteases;
 
-        /// <summary>
-        /// Instance-scoped search debounce timer for this window's search box.
-        /// Must not be shared/static: a shared timer lets a second window's
-        /// constructor steal this window's Tick subscription (see
-        /// SearchModifications for the regression this guards against).
-        /// </summary>
+        /// <summary>This window's own search debounce timer.</summary>
         private readonly SearchModifications _searchDebounce = new SearchModifications();
 
         /// <summary>Currently selected protein being displayed</summary>
